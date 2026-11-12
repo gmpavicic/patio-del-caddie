@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Patio del Caddie · Equipo</title><style>
+:root{--green:#497f5b;--dark:#193f2b;--cream:#f8f5ec;--line:#d9e3d8}*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--dark);font-family:system-ui,-apple-system,Arial,sans-serif}header{background:var(--green);color:white;padding:22px 18px;text-align:center}header .logo{display:block;width:min(300px,80vw);height:auto;margin:0 auto}header small{display:block;letter-spacing:2px}main{max-width:520px;margin:auto;padding:18px}nav{display:flex;gap:8px;margin:0 0 20px}nav button{flex:1;background:white;color:var(--dark);border:1px solid var(--line);font-size:13px}nav button.active{background:var(--dark);color:white}.card{background:white;border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 4px 18px #193f2b0b}h1,h2{margin:0 0 10px}h1{font-size:24px}h2{font-size:19px}p{line-height:1.5}label{font-size:13px;font-weight:700;display:block;margin:12px 0 5px}input{width:100%;padding:13px;border:1px solid #a7baa9;border-radius:10px;font-size:16px}button{padding:12px 15px;border:0;border-radius:10px;background:var(--green);color:white;font-weight:700;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#e7eee7;color:var(--dark)}.muted{color:#667a6c;font-size:13px}.count{font-size:46px;font-weight:800;margin:8px 0}.track{height:15px;background:#e4ebe4;border-radius:20px;overflow:hidden}.fill{height:100%;background:var(--green);transition:width .2s}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:16px 0}.stamp{aspect-ratio:1;border-radius:50%;display:grid;place-items:center;border:2px dashed #a8bba9;color:#7c9b83;font-size:22px}.stamp.done{background:var(--green);border:0;color:white}.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}.pill{border-radius:30px;background:#e9f1e8;padding:6px 12px;font-size:12px;font-weight:700}.notice{padding:12px;background:#f1f5e9;border-radius:10px;font-size:13px}.hidden{display:none}footer{text-align:center;padding:18px;color:#647b69;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}.error{color:#a12b20}.success{color:#287445}#qr{display:block;margin:14px auto;width:160px;height:160px;border:10px solid white;outline:1px solid var(--line)}
+</style></head>
+<body><header><img class="logo" src="logo-patio.png" alt="Patio del Caddie"></header>
+<main>
+<form id="login" class="card" hidden>
+  <h1>Acceso del personal</h1>
+  <label for="email">Correo</label><input id="email" type="email" autocomplete="username" required>
+  <label for="password">Contraseña</label><input id="password" type="password" autocomplete="current-password" required>
+  <p><button>Ingresar</button></p>
+</form>
+<p id="status" role="status" aria-live="polite"></p>
+<section id="team" hidden>
+  <div class="actions"><button id="refresh" class="secondary">Actualizar</button>
+  <button id="logout" class="secondary">Cerrar sesión</button></div>
+  <form class="card" id="register">
+    <h1>Registrar jugador</h1><label for="nickname">Apodo</label>
+    <input id="nickname" required minlength="2" maxlength="24"><p><button>Crear tarjeta</button></p>
+  </form>
+  <div class="card"><h2>Tarjetas</h2><div id="players"></div></div>
+  <div class="card"><h2>Ranking del mes</h2><ol id="ranking"></ol></div>
+</section>
+</main>
+<script type="module">
+const projectUrl = 'https://doijbfpofhvrqwamsatl.supabase.co';
+const publishableKey = 'sb_publishable_GpIuzRHO6VDNJb3x_SuePA_HOZvL_wr';
+
+const byId = (id) => document.getElementById(id);
+const login = byId('login');
+const team = byId('team');
+const status = byId('status');
+let busy = false;
+
+if (projectUrl && publishableKey) {
+  status.textContent = 'Conectando…';
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.81.1').catch((error) => {
+    status.textContent = 'No se pudo conectar. Recargá la página para reintentar.';
+    throw error;
+  });
+  const client = createClient(projectUrl, publishableKey);
+  const say = (message) => { status.textContent = message; };
+
+  function showLogin() {
+    team.hidden = true;
+    byId('players').replaceChildren();
+    byId('ranking').replaceChildren();
+    login.hidden = false;
+  }
+
+  function render(data) {
+    const rows = data.players.map((player) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const label = document.createElement('span');
+      label.textContent = player.name + ' · ' + player.progress + '/10 · ' + player.rewards + ' canjes';
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const visit = document.createElement('button');
+      visit.textContent = '+ Visita';
+      visit.disabled = player.lastVisit === data.day;
+      visit.onclick = () => run(() => update('visit', { player_id: player.id }, 'Visita registrada.'));
+      const redeem = document.createElement('button');
+      redeem.textContent = 'Canjear ☕';
+      redeem.disabled = player.progress < 10;
+      redeem.onclick = () => run(() => update('redeem', { player_id: player.id }, 'Café canjeado.'));
+      actions.append(visit, redeem);
+      row.append(label, actions);
+      return row;
+    });
+    byId('players').replaceChildren(...(rows.length ? rows : ['Todavía no hay jugadores.']));
+    const ranking = [...data.players].sort((a, b) => b.monthVisits - a.monthVisits);
+    byId('ranking').replaceChildren(...ranking.map((player) => {
+      const entry = document.createElement('li');
+      entry.textContent = player.name + ' · ' + player.monthVisits + ' visitas';
+      return entry;
+    }));
+    login.hidden = true;
+    team.hidden = false;
+  }
+
+  async function update(action = 'list', fields = {}, message = '') {
+    const { data, error } = await client.rpc('patio_team', { action, ...fields });
+    if (error) {
+      if (error.code === '42501' || error.code === 'PGRST301') showLogin();
+      throw error;
+    }
+    render(data);
+    say(message);
+  }
+
+  async function run(work) {
+    if (busy) return;
+    busy = true;
+    say('Cargando…');
+    try { await work(); }
+    catch (error) { say(error.message || 'No se pudo completar la operación.'); }
+    finally { busy = false; }
+  }
+
+  login.onsubmit = (event) => {
+    event.preventDefault();
+    run(async () => {
+      const password = byId('password');
+      const { error } = await client.auth.signInWithPassword({
+        email: byId('email').value.trim(), password: password.value
+      });
+      password.value = '';
+      if (error) throw error;
+      await update();
+    });
+  };
+  byId('register').onsubmit = (event) => {
+    event.preventDefault();
+    run(async () => {
+      const nickname = byId('nickname');
+      await update('register', { nickname: nickname.value.trim() }, 'Tarjeta creada.');
+      nickname.value = '';
+    });
+  };
+  byId('refresh').onclick = () => run(() => update());
+  byId('logout').onclick = () => run(async () => {
+    const { error } = await client.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+    showLogin();
+    say('');
+  });
+  window.addEventListener('focus', () => { if (!team.hidden) run(() => update()); });
+  run(async () => {
+    const { data, error } = await client.auth.getSession();
+    if (error) { showLogin(); throw error; }
+    if (data.session) await update();
+    else { showLogin(); say(''); }
+  });
+} else {
+  status.textContent = 'La versión compartida todavía está pendiente de conexión.';
+}
+</script></body></html>
