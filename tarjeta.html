@@ -9,7 +9,8 @@
 <div id="card" hidden><h2 id="name"></h2><p class="count" id="visits"></p>
 <progress id="progress" max="10" aria-label="Progreso hacia un café gratis"></progress>
 <p id="reward"></p><p id="redeemed" class="muted"></p><p>Mostrá esta tarjeta al pagar. El personal registra tu visita.</p></div>
-<button id="refresh" class="secondary" hidden>Actualizar</button></section></main>
+<button id="refresh" class="secondary" hidden>Actualizar</button></section>
+<section id="leaderboard" class="card" hidden><h2>Ranking de noviembre</h2><p id="ranking-period" class="muted"></p><ol id="ranking" style="list-style:none;padding:0"></ol></section></main>
 <script type="module">
 const projectUrl = 'https://doijbfpofhvrqwamsatl.supabase.co';
 const publishableKey = 'sb_publishable_GpIuzRHO6VDNJb3x_SuePA_HOZvL_wr';
@@ -32,6 +33,7 @@ async function loadCard() {
     const card = await response.json();
     byId('card').hidden = !card;
     if (!card) {
+      byId('leaderboard').hidden = true;
       status.textContent = 'Esta tarjeta no está disponible.';
       return;
     }
@@ -42,6 +44,27 @@ async function loadCard() {
       ? '¡Tenés un café gratis para canjear!'
       : 'Visitas que faltan para tu café gratis: ' + (10 - card.progress);
     byId('redeemed').textContent = 'Cafés canjeados: ' + card.rewards;
+    byId('leaderboard').hidden = !Array.isArray(card.ranking);
+    if (Array.isArray(card.ranking)) {
+      byId('ranking-period').textContent = card.rankingClosed
+        ? 'Resultados finales · Cerró el 30 de noviembre de 2026'
+        : 'Cierra el 30 de noviembre de 2026 a las 23:59, hora de Córdoba';
+      let place = 0;
+      let lastVisits;
+      const entries = card.ranking.map((player, index) => {
+        if (player.visits !== lastVisits) place = index + 1;
+        lastVisits = player.visits;
+        const row = document.createElement('li');
+        row.className = 'row';
+        const name = document.createElement('span');
+        name.textContent = place + '. ' + player.name;
+        const visits = document.createElement('strong');
+        visits.textContent = player.visits + (player.visits === 1 ? ' visita' : ' visitas');
+        row.append(name, visits);
+        return row;
+      });
+      byId('ranking').replaceChildren(...entries);
+    }
     status.textContent = '';
   } catch {
     status.textContent = 'No se pudo actualizar. Probá de nuevo.';
