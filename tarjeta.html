@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>Mi tarjeta · Patio del Caddie</title><style>
+:root{--green:#497f5b;--dark:#193f2b;--cream:#f8f5ec;--line:#d9e3d8}*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--dark);font-family:system-ui,-apple-system,Arial,sans-serif}header{background:var(--green);color:white;padding:22px 18px;text-align:center}header .logo{display:block;width:min(300px,80vw);height:auto;margin:0 auto}header small{display:block;letter-spacing:2px}main{max-width:520px;margin:auto;padding:18px}nav{display:flex;gap:8px;margin:0 0 20px}nav button{flex:1;background:white;color:var(--dark);border:1px solid var(--line);font-size:13px}nav button.active{background:var(--dark);color:white}.card{background:white;border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 4px 18px #193f2b0b}h1,h2{margin:0 0 10px}h1{font-size:24px}h2{font-size:19px}p{line-height:1.5}label{font-size:13px;font-weight:700;display:block;margin:12px 0 5px}input{width:100%;padding:13px;border:1px solid #a7baa9;border-radius:10px;font-size:16px}button{padding:12px 15px;border:0;border-radius:10px;background:var(--green);color:white;font-weight:700;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#e7eee7;color:var(--dark)}.muted{color:#667a6c;font-size:13px}.count{font-size:46px;font-weight:800;margin:8px 0}.track{height:15px;background:#e4ebe4;border-radius:20px;overflow:hidden}.fill{height:100%;background:var(--green);transition:width .2s}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:16px 0}.stamp{aspect-ratio:1;border-radius:50%;display:grid;place-items:center;border:2px dashed #a8bba9;color:#7c9b83;font-size:22px}.stamp.done{background:var(--green);border:0;color:white}.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}.pill{border-radius:30px;background:#e9f1e8;padding:6px 12px;font-size:12px;font-weight:700}.notice{padding:12px;background:#f1f5e9;border-radius:10px;font-size:13px}.hidden{display:none}footer{text-align:center;padding:18px;color:#647b69;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}.error{color:#a12b20}.success{color:#287445}#qr{display:block;margin:14px auto;width:160px;height:160px;border:10px solid white;outline:1px solid var(--line)}
+</style></head>
+<body><header><img class="logo" src="logo-patio.png" alt="Patio del Caddie"></header>
+<main><section class="card"><h1>Mi tarjeta</h1><p id="status" role="status">Cargando…</p>
+<div id="card" hidden><h2 id="name"></h2><p class="count" id="visits"></p>
+<progress id="progress" max="10" aria-label="Progreso hacia un café gratis"></progress>
+<p id="reward"></p><p id="redeemed" class="muted"></p><p>Mostrá esta tarjeta al pagar. El personal registra tu visita.</p></div>
+<button id="refresh" class="secondary" hidden>Actualizar</button></section></main>
+<script type="module">
+const projectUrl = 'https://doijbfpofhvrqwamsatl.supabase.co';
+const publishableKey = 'sb_publishable_GpIuzRHO6VDNJb3x_SuePA_HOZvL_wr';
+const token = location.hash.slice(1);
+const byId = (id) => document.getElementById(id);
+const status = byId('status');
+const refresh = byId('refresh');
+
+async function loadCard() {
+  refresh.disabled = true;
+  status.textContent = 'Cargando…';
+  try {
+    const response = await fetch(projectUrl + '/rest/v1/rpc/patio_card', {
+      method: 'POST',
+      headers: { apikey: publishableKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ card_id: token }),
+      cache: 'no-store'
+    });
+    if (!response.ok) throw new Error('Consulta fallida');
+    const card = await response.json();
+    byId('card').hidden = !card;
+    if (!card) {
+      status.textContent = 'Esta tarjeta no está disponible.';
+      return;
+    }
+    byId('name').textContent = card.name;
+    byId('visits').textContent = card.progress + '/10 visitas';
+    byId('progress').value = card.progress;
+    byId('reward').textContent = card.progress >= 10
+      ? '¡Tenés un café gratis para canjear!'
+      : 'Visitas que faltan para tu café gratis: ' + (10 - card.progress);
+    byId('redeemed').textContent = 'Cafés canjeados: ' + card.rewards;
+    status.textContent = '';
+  } catch {
+    status.textContent = 'No se pudo actualizar. Probá de nuevo.';
+  } finally {
+    refresh.disabled = false;
+  }
+}
+
+if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(token)) {
+  refresh.hidden = false;
+  refresh.onclick = loadCard;
+  window.addEventListener('focus', () => { if (!refresh.disabled) loadCard(); });
+  loadCard();
+} else {
+  status.textContent = 'Abrí el enlace personal de tu tarjeta.';
+}
+</script></body></html>
